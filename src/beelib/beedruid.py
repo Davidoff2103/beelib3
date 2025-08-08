@@ -5,37 +5,57 @@ import isodate
 from pydruid.db import connect
 import pandas as pd
 
-
 def run_druid_query(druid_conf, query):
-    """runs any druid query passed by parameter"""
+    """
+    Execute a raw Druid SQL query.
+
+    Parameters:
+    - druid_conf (dict): Configuration dictionary for Druid connection.
+    - query (str): The SQL query to execute.
+
+    Returns:
+    - list: Results as a list of dictionaries, each representing a row.
+    """
     druid = connect(**druid_conf)
     cursor = druid.cursor()
     cursor.execute(query)
     df_dic = cursor.fetchall()
-    return[item._asdict() for item in df_dic]
+    return [item._asdict() for item in df_dic]
 
 
 def get_timeseries_from_druid(d_hash, druid_connection, druid_datasource, ts_ini, ts_end):
-    """Obtains an harmonized timeseries from druid"""
-    druid_query = """
+    """
+    Retrieve a harmonized time series from Druid.
+
+    Parameters:
+    - d_hash (str): Identifier for the time series.
+    - druid_connection (dict): Druid connection configuration.
+    - druid_datasource (str): Name of the Druid datasource.
+    - ts_ini (datetime): Start timestamp for the query.
+    - ts_end (datetime): End timestamp for the query.
+
+    Returns:
+    - pd.DataFrame: A DataFrame with time-indexed data.
+    """
+    druid_query = f"""
     SELECT
         t1."__time" AS "start",
         MILLIS_TO_TIMESTAMP(CAST(JSON_VALUE(PARSE_JSON(TO_JSON_STRING(t1."end")), '$.rhs') AS BIGINT) * 1000) AS "end",
         "isReal",
         JSON_VALUE(PARSE_JSON(TO_JSON_STRING(t1."value")), '$.rhs') AS "value"
-    FROM "{datasource}"  t1
+    FROM "{druid_datasource}"  t1
     JOIN (
         SELECT "__time", MAX(MILLIS_TO_TIMESTAMP(CAST("ingestion_time" AS BIGINT) )) AS "ingestion_time" 
-        FROM "{datasource}"
-            WHERE "hash"='{hash}'
-            AND "__time" > TIMESTAMP '{ts_ini}'
-            AND "__time" < TIMESTAMP '{ts_end}'
+        FROM "{druid_datasource}"
+            WHERE "hash"='{d_hash}'
+            AND "__time" > TIMESTAMP '{ts_ini.strftime('%Y-%m-%d %H:%M:%S')}'
+            AND "__time" < TIMESTAMP '{ts_end.strftime('%Y-%m-%d %H:%M:%S')}'
         GROUP BY "__time" 
     ) t2
     ON t1.__time = t2.__time AND MILLIS_TO_TIMESTAMP(CAST(t1."ingestion_time" AS BIGINT)) = t2.ingestion_time
-    WHERE t1."hash"='{hash}'
-    AND t1."__time"> TIMESTAMP '{ts_ini}'
-    AND t1."__time" < TIMESTAMP '{ts_end}'
+    WHERE t1."hash"='{d_hash}'
+    AND t1."__time"> TIMESTAMP '{ts_ini.strftime('%Y-%m-%d %H:%M:%S')}'
+    AND t1."__time" < TIMESTAMP '{ts_end.strftime('%Y-%m-%d %H:%M:%S')}'
     """
     data = run_druid_query(druid_connection,
                            query=druid_query.format(
@@ -53,7 +73,21 @@ def get_timeseries_from_druid(d_hash, druid_connection, druid_datasource, ts_ini
 
 
 def harmonize_for_druid(data, timestamp_key, value_key, hash_key, property_key, is_real, freq):
-    """harmonizes the timeseries to be sent to druid"""
+    """
+    Harmonize data for ingestion into Druid.
+
+    Parameters:
+    - data (dict): Input data dictionary.
+    - timestamp_key (str): Key in `data` for the timestamp.
+    - value_key (str): Key in `data` for the value.
+    - hash_key (str): Key in `data` for the hash identifier.
+    - property_key (str): Key in `data` for the property.
+    - is_real (bool): Boolean indicating if the data is real.
+    - freq (str): ISO 8601 duration for the time interval.
+
+    Returns:
+    - dict: A harmonized dictionary ready for Druid ingestion.
+    """
     to_save = {
         "start": int(data[timestamp_key].timestamp()),
         "end": int((data[timestamp_key] + isodate.parse_duration(freq)).timestamp() - 1),
@@ -66,7 +100,17 @@ def harmonize_for_druid(data, timestamp_key, value_key, hash_key, property_key, 
 
 
 def check_all_ingested(check, druid_connection, druid_datasource):
-    """checks if the ingested value is in the database"""
+    """
+    Verify if a specific data point has been ingested into Druid.
+
+    Parameters:
+    - check (dict): The expected data point to verify.
+    - druid_connection (dict): Druid connection configuration.
+    - druid_datasource (str): Name of the Druid datasource.
+
+    Raises:
+    - Exception: If the data is not ingested within 30 seconds.
+    """
     if not check:
         return
     utc_dt = datetime.fromtimestamp(check['start'], tz=timezone.utc)

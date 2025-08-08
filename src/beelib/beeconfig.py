@@ -2,8 +2,18 @@ import json
 import os
 import re
 
-
 def read_config(conf_file=None):
+    """
+    Read configuration from a file or environment variable.
+
+    Parameters:
+    - conf_file (str, optional): Path to the configuration file. If not provided,
+      the environment variable 'CONF_FILE' is used.
+
+    Returns:
+    - dict: The loaded configuration as a dictionary. Special handling is applied
+      to Neo4j-related keys to convert 'auth' values to tuples.
+    """
     if conf_file:
         conf = json.load(open(conf_file))
     else:

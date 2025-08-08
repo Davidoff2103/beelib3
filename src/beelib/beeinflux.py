@@ -4,8 +4,16 @@ import influxdb_client
 import isodate
 import pandas as pd
 
-
 def connect_influx(influx_connection):
+    """
+    Establish a connection to InfluxDB.
+
+    Parameters:
+    - influx_connection (dict): Configuration dictionary containing 'url', 'org', and 'token'.
+
+    Returns:
+    - influxdb_client.InfluxDBClient: An InfluxDB client instance.
+    """
     client = influxdb_client.InfluxDBClient(
         url=influx_connection['connection']['url'],
         org=influx_connection['connection']['org'],
@@ -14,14 +22,35 @@ def connect_influx(influx_connection):
     )
     return client
 
-
 def run_query(influx_connection, query):
+    """
+    Execute an InfluxDB query.
+
+    Parameters:
+    - influx_connection (dict): InfluxDB connection configuration.
+    - query (str): The InfluxDB Flux query to execute.
+
+    Returns:
+    - pandas.DataFrame: Results of the query as a DataFrame.
+    """
     client = connect_influx(influx_connection)
     query_api = client.query_api()
     return query_api.query_data_frame(query)
 
-
 def get_timeseries_by_hash(d_hash, freq, influx_connection, ts_ini, ts_end):
+    """
+    Retrieve a time series from InfluxDB filtered by hash and time range.
+
+    Parameters:
+    - d_hash (str): Hash identifier for the time series.
+    - freq (str): ISO 8601 duration for the time interval.
+    - influx_connection (dict): InfluxDB connection configuration.
+    - ts_ini (datetime): Start timestamp for the query.
+    - ts_end (datetime): End timestamp for the query.
+
+    Returns:
+    - pandas.DataFrame: A DataFrame with time-indexed data.
+    """
     aggregation_window = int(isodate.parse_duration(freq).total_seconds() * 10**9)
     start = int(ts_ini.timestamp()) * 10**9
     end = int(ts_end.timestamp()) * 10**9
@@ -44,4 +73,3 @@ def get_timeseries_by_hash(d_hash, freq, influx_connection, ts_ini, ts_end):
     df = df[["start", "end", "isReal", "value"]]
     df.set_index("start", inplace=True)
     return df
-

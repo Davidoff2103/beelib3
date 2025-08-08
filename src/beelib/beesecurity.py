@@ -5,29 +5,44 @@ import os
 from Crypto import Random
 from Crypto.Cipher import AES
 
-
 def pad(s):
     """
-    pad with spaces at the end of the text because AES needs 16 byte blocks
-    :param s:
-    :return:
+    Pad a string to fit AES block size (16 bytes).
+
+    Parameters:
+    - s (str): The input string.
+
+    Returns:
+    - str: The padded string.
     """
     block_size = AES.block_size
     remainder = len(s) % block_size
     padding_needed = block_size - remainder
     return s + padding_needed * ' '
 
-
 def un_pad(s):
     """
-    remove the extra spaces at the end
-    :param s:
-    :return:
+    Remove padding from a string.
+
+    Parameters:
+    - s (str): The padded string.
+
+    Returns:
+    - str: The unpadded string.
     """
     return s.rstrip()
 
-
 def encrypt(plain_text, password):
+    """
+    Encrypt a plaintext string using AES with a password.
+
+    Parameters:
+    - plain_text (str): The plaintext to encrypt.
+    - password (str): The password used for encryption.
+
+    Returns:
+    - str: The base64-encoded encrypted string with salt and IV.
+    """
     # generate a random salt
     salt = os.urandom(AES.block_size)
 
@@ -46,8 +61,17 @@ def encrypt(plain_text, password):
     return (base64.b64encode(cipher_config.encrypt(padded_text.encode())) + base64.b64encode(salt) + base64.b64encode(
         iv)).decode()
 
-
 def decrypt(enc_str, password):
+    """
+    Decrypt a base64-encoded encrypted string.
+
+    Parameters:
+    - enc_str (str): The encrypted string with salt and IV.
+    - password (str): The password used for decryption.
+
+    Returns:
+    - str: The decrypted plaintext.
+    """
     # decode the dictionary entries from base64
     iv = base64.b64decode(enc_str[-24:])
     salt = base64.b64decode(enc_str[-48:-24])
@@ -66,4 +90,3 @@ def decrypt(enc_str, password):
     original = un_pad(decrypted)
 
     return original.decode('utf-8')
-
